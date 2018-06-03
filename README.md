@@ -1,6 +1,6 @@
 # game-feature-learning
 
-<img src="https://jason718.github.io/project/cvpr18/files/concept_pic.png" width="400"/>
+<img src="https://jason718.github.io/project/cvpr18/files/archi.png" width="400"/>
 
 [[Project]](https://https://jason718.github.io/project/cvpr18/main.html) [[Paper]](https://jason718.github.io/project/cvpr18/files/cvpr18_jason_camera_ready.pdf) 
 
@@ -32,6 +32,10 @@ pip install -r requirements.txt
 git clone https://github.com/jason718/game-feature-learning
 cd game-feature-learning
 ```
+
+### Pre-trained models:
+- Caffemodel(Caffenet):
+- Pytorch model:
 
 ### Train/Test
 - Dataset:
