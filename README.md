@@ -48,7 +48,8 @@ cd game-feature-learning
 
 
 ## Useful Resources
-There are lots of awesome papers explored self-supervision for various tasks such as Image/Video Representation learning, Reinforcement learning, and Robotics. I am maintaining a paper list[[awesome-self-supervised-learning]](https://github.com/jason718/awesome-self-supervised-learning) on Github. You are more than welcome to contribute and share :) 
+There are lots of awesome papers explored self-supervision for various tasks such as Image/Video Representation learning,
+Reinforcement learning, and Robotics. I am maintaining a paper list [[awesome-self-supervised-learning]](https://github.com/jason718/awesome-self-supervised-learning) on Github. You are more than welcome to contribute and share :) 
 
 One day, Un-/Self-supervised learning will defeat supervised learning (which is already true in some geometry tasks)!
 
