@@ -1,0 +1,13 @@
+archi: alexnet
+checkpoints_dir: outputs
+
+cpu_mode: False
+
+isTrain: True
+train:
+   use_DA: True
+   loss_DA_weight: 0.1
+
+   loss_dep_weight: 1
+   loss_norm_weight: 1
+   loss_edge_weight: 1

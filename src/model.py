@@ -1,51 +1,61 @@
 import os
 import torch
 from collections import OrderedDict
-from . import networks
+
+import networks
 
 #########################################################################
 #  Network definition
-#  Options: 
+#  Options:
 #      alexnet(caffenet-definition), vgg16, resnet(TODO)
 #  Note:
 #      github.com/BVLC/caffe/tree/master/models/bvlc_reference_caffenet
 #      use this to follow previous paper's practice.
 ##########################################################################
-
 class Model():
     def initialize(self, cfg):
         self.cfg = cfg
-        self.isTrain = cfg.isTrain
-        self.save_dir = os.path.join(cfg.checkpoints_dir, cfg.name)
+        #  self.save_dir = os.path.join(cfg['checkpoints_dir'], cfg['archi'])
 
         # if using GPUs
-        if not cfg.cpu_mode:
-            self.gpu_ids = cfg.gpu_ids
-            self.device = torch.device('cuda:{}'.format(self.gpu_ids[0])) if self.gpu_ids else torch.device('cpu')
+        if not cfg['cpu_mode']:
+            #  self.gpu_ids = cfg.gpu_ids
+            #  self.device = torch.device('cuda:{}'.format(self.gpu_ids[0])) if self.gpu_ids else torch.device('cpu')
             torch.backends.cudnn.benchmark = True
 
-        # specify losses
-        self.loss_name = ['l_norm', 'l_dep', 'l_edge']
-        if self.cfg['use_DA']:
-            self.loss_name += ['loss_D', 'loss_G']
+        #  # specify losses
+        #  self.loss_name = ['l_norm', 'l_dep', 'l_edge']
+        #  if self.cfg['use_DA']:
+        #      self.loss_name += ['loss_D', 'loss_G']
 
         # define network
-        self.netB = None
-        self.netH = None
-        if self.cfg['use_DA'] and self.cfg['isTrain']:
-            self.netD = None
+        if cfg['archi'] == 'alexnet':
+            self.netB = networks.netB_alexnet()
+            self.netH = networks.netH_alexnet()
+            if self.cfg['use_DA'] and self.cfg['isTrain']:
+                self.netD = networks.netD_alexnet(cfg)
+        elif cfg['archi'] == 'vgg16':
+            self.netB = networks.netB_vgg16(cfg)
+            self.netH = networks.netH_vgg16(cfg)
+            if self.cfg['use_DA'] and self.cfg['isTrain']:
+                self.netD = netD_vgg16(cfg)
+        elif 'resnet' in cfg['archi']:
+            raise NotImplementedError
+            self.netB = networks.netB_resnet(cfg)
+            self.netH = networks.netH_resnet(cfg)
+            if self.cfg['use_DA'] and self.cfg['isTrain']:
+                self.netD = networks.netD_resnet(cfg)
+        else:
+            raise ValueError('Un-supported network')
+
+        if cfg['isTrain']:
+            self.schedulers = [networks.get_scheduler(cfgimizer, cfg) for cfgimizer in self.cfgimizers]
+
+        if not cfg['isTrain'] or cfg.continue_train:
+            self.load_networks(cfg.which_epoch)
 
     def set_input(self, input):
         self.input = input
-
-    # load and print networks; create schedulers
-    def setup(self, cfg, parser=None):
-        if self.isTrain:
-            self.schedulers = [networks.get_scheduler(cfgimizer, cfg) for cfgimizer in self.cfgimizers]
-
-        if not self.isTrain or cfg.continue_train:
-            self.load_networks(cfg.which_epoch)
-        self.print_networks(cfg.verbose)
 
     def forward(self):
         self.feat_syn = self.netB(self.input_syn, self.cfg.DA_feat)
@@ -108,10 +118,9 @@ class Model():
 
     # make models eval mode during test time
     def eval(self):
-        for name in self.model_names:
-            if isinstance(name, str):
-                net = getattr(self, 'net' + name)
-                net.eval()
+        self.netB.eval()
+        self.netH.eval()
+        self.netD.eval()
 
     # used in test time, wrapping `forward` in no_grad() so we don't save
     # intermediate steps for backprop
@@ -159,7 +168,7 @@ class Model():
 
     # load models from the disk
     def load_networks(self, which_epoch):
-	pass
+	    pass
 
     # print network information
     def print_networks(self, verbose):
@@ -188,3 +197,10 @@ class Model():
 ######################################
 #  Test code
 ######################################
+import yaml
+config_file = 'configs/alexnet.yaml'
+with open(config_file, 'r') as f_in:
+    cfg = yaml.load(f_in)
+print(cfg)
+model = Model()
+model.initialize(cfg)

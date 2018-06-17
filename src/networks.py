@@ -1,5 +1,5 @@
 import torch
-from .basic_model import BasicModel
+import torch.nn as nn
 
 ############################
 #  Functions definition
@@ -46,7 +46,6 @@ def get_scheduler(optimizer, opt):
 #############################
 # alexnet-model definition
 #############################
-
 class netB_alexnet(nn.Module):
     def __init__(self):
         super(netB_alexnet, self).__init__()
@@ -93,12 +92,12 @@ class netB_alexnet(nn.Module):
         feat6 = self.bn6(self.fc6(self.maxpooling5(self.relu5(x))))
         feat7 = self.relu7(self.bn7(self.fc7(self.relu6(x))))
 
-        return feat1, feat2, feat3, feat4, feat5, feat6, feat7
+        return {'conv1':feat1, 'conv2':feat2, 'conv3':feat3,
+                'conv4':feat4, 'conv5':feat5, 'fc6':feat6, 'fc7':feat7}
 
 class netH_alexnet(nn.Module):
-    def __init__(self, ngpu):
+    def __init__(self):
         super(netH_alexnet, self).__init__()
-        self.ngpu = ngpu
         self.normal = nn.Sequential(
             nn.ConvTranspose2d(4096, 64, kernel_size=3, stride=2), nn.BatchNorm2d(64),nn.ReLU(inplace=True),
             nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2), nn.BatchNorm2d(64), nn.ReLU(inplace=True),
@@ -117,26 +116,12 @@ class netH_alexnet(nn.Module):
             nn.ConvTranspose2d(64, 64, kernel_size=5, stride=2), nn.BatchNorm2d(64), nn.ReLU(inplace=True),
             nn.ConvTranspose2d(64, 1, kernel_size=3, stride=2))
 
-        self.normal.apply(weights_init)
-        self.depth.apply(weights_init)
-        self.edge.apply(weights_init)
-
     def forward(self, x):
-        if isinstance(x.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            n = nn.parallel.data_parallel(self.normal, x, range(self.ngpu))
-            d = nn.parallel.data_parallel(self.depth, x, range(self.ngpu))
-            e = nn.parallel.data_parallel(self.edge, x, range(self.ngpu))
-        else:
-            n = self.normal(x)
-            d = self.depth(x)
-            e = self.edge(x)
-        return d, e, n
-
+        return {'depth':self.depth(x), 'edge':self.edge(x), 'norm':self.normal(x)}
 
 class netD_alexnet(nn.Module):
-    def __init__(self, ngpu):
+    def __init__(self):
         super(netD_alexnet, self).__init__()
-        self.ngpu = ngpu
         self.main = nn.Sequential(
             # input is 4096 x 13 x 13
             nn.Conv2d(4096, 64, kernel_size=3, stride=1, padding=1),
@@ -149,16 +134,10 @@ class netD_alexnet(nn.Module):
             nn.BatchNorm2d(256), nn.LeakyReLU(0.2, inplace=True),
             # state size. 256 x 3 x 3
             nn.Conv2d(256,   1, kernel_size=1, stride=3, padding=0),
-            nn.Sigmoid()
-        )
-        self.main.apply(weights_init)
+            nn.Sigmoid())
 
     def forward(self, input):
-        if isinstance(input.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
-        else:
-            output = self.main(input)
-
+        output = self.main(input)
         return output.view(-1, 1).squeeze(1)
 
 #############################
