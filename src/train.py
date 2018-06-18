@@ -1,89 +1,76 @@
+import pdb
+import yaml
 import argparse
+import torch
+import torchvision
 
-parser = argparse.ArgumentParser(description='Training game feature learner')
-# Archi
-parser.add_argument('--crop', type=int, default=224, help='The input of the network')
-parser.add_argument('--arch', type=str, default='alexnet', help='Which network to use')
-# Domain Adaptation
-parser.add_argument('--poolsize', type=int, default=100, help='Discriminator pool')
-parser.add_argument('--gan_weight', type=float, default=0.05, help='Weight for the gan loss')
-parser.add_argument('--hasDA', action='store_true',  help='Use Domain Adaptation or not')
-parser.add_argument('--feat_layer', type=str, default='conv5', help='out put features at this layer for Domain Adaptation')
-# Training
-parser.add_argument('--bs', type=int, default=64, help='training batch size')
-parser.add_argument('--nEpochs', type=int, default=200, help='number of epochs to train for')
-parser.add_argument('--vis_point', type=int, default=300, help='vis. the results every 20 iter. Default=20')
-parser.add_argument('--ngpu', type=int, default=1, help='number of gpus to use')
-parser.add_argument('--log_path', type=str, default='./tmp/logs', help='Where to save log files')
-parser.add_argument('--model_path', type=str, default='./model_vgg/vgg_gan_c4_netH_ep14', help='Where to save log files')
-parser.add_argument('--outf', type=str, default='./tmp', help='output path')
-# Dataset
-parser.add_argument('--real_dataset', type=str, default='./dataset/places', help='real-world dataset path')
-parser.add_argument('--suncg', type=str, default='/home/SSD5/jason-data/SUNCG/suncg_image256/', help='suncg path')
-parser.add_argument('--scenenet_p', type=str, default=None, help='scenenet path')
-# Optimization
-parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for adam. default=0.5')
-parser.add_argument('--lr', type=float, default=0.0002, help='Learning Rate. Default=0.0002')
-parser.add_argument('--lrB', type=float, default=0.0002, help='Learning Rate. Default=0.0002')
-parser.add_argument('--momentum', type=float, default=0.9, help='Momentum. Default=0.9')
-parser.add_argument('--weight_decay', type=float, default=0.0005, help='weight_decay. Default=0.0005')
-parser.add_argument('--stepsize', type=float, default=20, help='weight_decay. Default=0.0005')
-# Others..
-parser.add_argument('--threads', type=int, default=8, help='number of threads for data loader to use')
-parser.add_argument('--seed', type=int, default=123, help='random seed to use. Default=123')
-parser.add_argument('--pretrained', action='store_true',  help='whether load pre-trained or not')
+from dataset import GameDataset
+from model import Model
 
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default='configs/alexnet.yaml', help='Path to the config file.')
+    parser.add_argument('--output_path', type=str, default='.', help="outputs path")
+    parser.add_argument("--resume", action="store_true")
+    opts = parser.parse_args()
 
-opt = parser.parse_args()
-print(opt)
+    with open(opts.config, 'r') as f_in:
+        cfg = yaml.load(f_in)
+    print(cfg)
 
-# Use the mean from ImageNet
-normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[1, 1, 1])
+    ## Prepare dataset
+    normalize = torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[1, 1, 1])
+    data_syn = GameDataset(cfg, normalize)
+    dataloader_syn = torch.utils.data.DataLoader(data_syn, num_workers=cfg['NUM_WORKER'],
+                batch_size=cfg['BATCH_SIZE'], shuffle=True)
+    dataiterator_syn = iter(dataloader_syn)
+    print('==> Number of synthetic training images: %d.' % len(data_syn))
 
-# Setting up dataset for training
-if opt.data_syn == "suncg":
-    train_syn = GameDataset(txt_file='dataset/suncg_lst/suncg_train_lst.txt', suncg_dir=opt.suncg,
-        transform=transforms.Compose([RandomCrop(opt.crop), ToTensor()]), norm = normalize)
-elif opt.data_syn == "scenenet":
-     train_syn = GameDataset(txt_file='dataset/suncg_lst/suncg_train_lst.txt', suncg_dir=opt.suncg,
-        transform=transforms.Compose([RandomCrop(opt.crop), ToTensor()]), norm = normalize)
-elif opt.data_syn == "suncg+scenenet-1.5m":
-    train_syn = GameDataset(txt_file='dataset/train_1m_shuffle.txt',
-        suncg_dir=opt.suncg, scenenet_dir=opt.scenenet_p,
-        transform=transforms.Compose([RandomCrop(opt.crop),
-        ToTensor()]), norm = normalize)
-elif opt.data_syn == "suncg+scenent":
-    train_syn = GameDataset(txt_file='dataset/train_1m_shuffle.txt',
-        suncg_dir=opt.suncg, scenenet_dir=opt.scenenet_p,
-        transform=transforms.Compose([RandomCrop(opt.crop),
-        ToTensor()]), norm = normalize)
-else:
-    raise ValueError("Not Supported Synthetic dataset!")
-print("==> Using %s dataset for training" % opt.data_syn)
+    if cfg['USE_DA']:
+        data_real = torchvision.datasets.ImageFolder(cfg['REAL_DIR'],
+                    torchvision.transforms.Compose([
+                        torchvision.transforms.Resize((cfg['CROP_SIZE'],cfg['CROP_SIZE'])),
+                        torchvision.transforms.ToTensor(),
+                        normalize]))
+        dataloader_real = torch.utils.data.DataLoader(data_real, num_workers=cfg['NUM_WORKER'],
+                        batch_size=cfg['BATCH_SIZE'], shuffle=True)
+        dataiterator_real = iter(dataloader_real)
+        print('==> Number of real training images: %d.' % len(data_real))
 
-# Seeting up real-world dataset for domain adaptation is there is any
-if opt.data_real is None:
-    hasDA = False
-    print("==> Not using Domain Adaptation")
-else:
-    hasDA = True
-    if opt.data_real == 'places':
-        train_real = datasets.ImageFolder(opt.real_dataset,
-                        transforms.Compose([transforms.Scale((256,256)),
-                                        transforms.RandomCrop((opt.crop, opt.crop)),
-                                        transforms.ToTensor(), normalize]))
-    elif opt.data_real == "ImageNet":
-        pass
-    elif opt.data_real == "places+ImageNet":
-        pass
-    else:
-        raise ValueError("Not Supported Real-world dataset!")
-    print('==> Using %s dataset for Domain Adaptation' % opt.data_real)
+    ## Prepare model
+    model = Model()
+    model.initialize(cfg)
 
-# Begiin Training
-if hasDA:
-    train_DA(train_syn, train_real, opt)
-else:
-    train(train_syn, opt)
+    ## Training
+    for epoch in range(cfg['N_EPOCH']):
+        # Get input data, doing this since they of diff. size
+        inputs = {}
+        while True:
+            try:
+                inputs['syn'] = next(dataiterator_syn)
+            except StopIteration:
+                dataiterator_syn=iter(dataloader_syn)
+                break
+            if cfg['USE_DA']:
+                try:
+                    inputs['real'] = next(dataiterator_real)
+                except StopIteration:
+                    dataloader_real=iter(dataloader_real)
 
-print("==> Training Done!")
+            model.set_input(inputs)
+
+            model.optimize()
+
+            ## logging
+            if total_steps % opt.display_freq == 0:
+                pass
+            if total_steps % opt.print_loss_freq == 0:
+                pass
+        ## saving
+        if (epoch+1) % cfg['SAVE_FREQ'] == 0:
+            print('==> Saving the checkpoint ep: %d' % epoch)
+            #  model.save_networks()
+
+    print('==> Finished Training')
+    del dataiterator_syn
+    del dataiterator_real

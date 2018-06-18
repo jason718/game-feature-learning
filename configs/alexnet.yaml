@@ -1,13 +1,26 @@
-archi: alexnet
+ARCHI: alexnet
 checkpoints_dir: outputs
 
-cpu_mode: False
+CPU_MODE: False
+GPU_IDS: [0,1]
+NUM_WORKER: 4
 
-isTrain: True
-train:
-   use_DA: True
-   loss_DA_weight: 0.1
+TRAIN: True
+CROP_SIZE: 227
+BATCH_SIZE: 2
+N_EPOCH: 40
+TRAIN_FILE: ./data/debug_10.txt
+SUNCG_DIR: /home/jason/saturnv-game/SUNCG/suncg_image256
+SCENENET_DIR: /home/jason/saturnv-game/scenenet5m
+SAVE_FREQ: 2
 
-   loss_dep_weight: 1
-   loss_norm_weight: 1
-   loss_edge_weight: 1
+# Domain Adaptation
+USE_DA: True
+DA_LAYER: conv5
+REAL_DIR: /home/jason/saturnv-game/places/debug
+
+loss_DA_weight: 0.1
+
+loss_dep_weight: 1
+loss_norm_weight: 1
+loss_edge_weight: 1

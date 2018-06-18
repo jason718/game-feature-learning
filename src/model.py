@@ -1,5 +1,6 @@
 import os
 import torch
+import pdb
 from collections import OrderedDict
 
 import networks
@@ -18,10 +19,13 @@ class Model():
         #  self.save_dir = os.path.join(cfg['checkpoints_dir'], cfg['archi'])
 
         # if using GPUs
-        if not cfg['cpu_mode']:
-            #  self.gpu_ids = cfg.gpu_ids
-            #  self.device = torch.device('cuda:{}'.format(self.gpu_ids[0])) if self.gpu_ids else torch.device('cpu')
+        if cfg['GPU_IDS']:
+            assert(torch.cuda.is_available())
+            self.device = torch.device('cuda:{}'.format(cfg['GPU_IDS'][0]))
             torch.backends.cudnn.benchmark = True
+            print('Using %d GPUs'% len(cfg['GPU_IDS']))
+        else:
+            self.device = torch.device('cpu')
 
         #  # specify losses
         #  self.loss_name = ['l_norm', 'l_dep', 'l_edge']
@@ -29,39 +33,53 @@ class Model():
         #      self.loss_name += ['loss_D', 'loss_G']
 
         # define network
-        if cfg['archi'] == 'alexnet':
+        if cfg['ARCHI'] == 'alexnet':
             self.netB = networks.netB_alexnet()
             self.netH = networks.netH_alexnet()
-            if self.cfg['use_DA'] and self.cfg['isTrain']:
-                self.netD = networks.netD_alexnet(cfg)
-        elif cfg['archi'] == 'vgg16':
-            self.netB = networks.netB_vgg16(cfg)
-            self.netH = networks.netH_vgg16(cfg)
-            if self.cfg['use_DA'] and self.cfg['isTrain']:
-                self.netD = netD_vgg16(cfg)
-        elif 'resnet' in cfg['archi']:
+            if self.cfg['USE_DA'] and self.cfg['TRAIN']:
+                self.netD = networks.netD_alexnet(self.cfg['DA_LAYER'])
+        elif cfg['ARCHI'] == 'vgg16':
             raise NotImplementedError
-            self.netB = networks.netB_resnet(cfg)
-            self.netH = networks.netH_resnet(cfg)
-            if self.cfg['use_DA'] and self.cfg['isTrain']:
-                self.netD = networks.netD_resnet(cfg)
+            self.netB = networks.netB_vgg16()
+            self.netH = networks.netH_vgg16()
+            if self.cfg['USE_DA'] and self.cfg['TRAIN']:
+                self.netD = netD_vgg16(self.cfg['DA_LAYER'])
+        elif 'resnet' in cfg['ARCHI']:
+            raise NotImplementedError
+            self.netB = networks.netB_resnet()
+            self.netH = networks.netH_resnet()
+            if self.cfg['USE_DA'] and self.cfg['TRAIN']:
+                self.netD = networks.netD_resnet(self.cfg['DA_LAYER'])
         else:
             raise ValueError('Un-supported network')
 
-        if cfg['isTrain']:
-            self.schedulers = [networks.get_scheduler(cfgimizer, cfg) for cfgimizer in self.cfgimizers]
+        # initialize
+        networks.init_net(self.netB, cfg['GPU_IDS'], 'xavier')
+        networks.init_net(self.netH, cfg['GPU_IDS'], 'xavier')
+        networks.init_net(self.netD, cfg['GPU_IDS'], 'xavier')
 
-        if not cfg['isTrain'] or cfg.continue_train:
-            self.load_networks(cfg.which_epoch)
+        #  if cfg['TRAIN']:
+            #  self.schedulers = [networks.get_scheduler(cfgimizer, cfg) for cfgimizer in self.cfgimizers]
 
-    def set_input(self, input):
-        self.input = input
+        #  if not cfg['TRAIN'] or cfg.continue_train:
+        #      self.load_networks(cfg.which_epoch)
+
+    def set_input(self, inputs):
+        self.input_syn_color = inputs['syn']['color'].to(self.device)
+        self.input_syn_dep = inputs['syn']['depth'].to(self.device)
+        self.input_syn_edge = inputs['syn']['edge'].to(self.device)
+        self.input_syn_edge_count = inputs['syn']['edge_pix'].to(self.device)
+        self.input_syn_norm = inputs['syn']['normal'].to(self.device)
+        if self.cfg['USE_DA']:
+            self.input_real_color = inputs['real'][0].to(self.device)
 
     def forward(self):
-        self.feat_syn = self.netB(self.input_syn, self.cfg.DA_feat)
-
-        if self.cfg['use_DA'] and self.cfg['isTrain']:
-            self.feat_real = self.netB(self.input_real, self.cfg.DA_feat)
+        self.feat_syn = self.netB(self.input_syn_color)
+        self.head_pred = self.netH(self.feat_syn['out'])
+        if self.cfg['USE_DA'] and self.cfg['TRAIN']:
+            self.feat_real = self.netB(self.input_real_color)
+            self.pred_D_real = self.netD(self.feat_real[self.cfg['DA_LAYER']])
+            self.pred_D_syn  = self.netD(self.feat_syn[self.cfg['DA_LAYER']])
 
     def backward_BH(self):
         # compute prediction
@@ -75,7 +93,7 @@ class Model():
         # backward from 3 tasks
         loss = self.loss_dep + self.loss_edge + self.loss_norm
 
-        if self.cfg['use_DA']:
+        if self.cfg['USE_DA']:
             pred_syn = self.netD(self.feat_syn.detach())
             self.loss_DA = self.criterionGAN(pred_syn, True)
             loss += self.loss_DA * self.cfg['loss_DA_weight']
@@ -99,9 +117,10 @@ class Model():
         self.loss_D.backward()
 
     def optimize(self):
+        pdb.set_trace()
         self.forward()
         # if DA, update on real data
-        if self.cfg['use_DA']:
+        if self.cfg['USE_DA']:
             self.set_requires_grad(self.netD, True)
             self.optimizer_D.zero_grad()
             self.backward_D()
@@ -170,20 +189,6 @@ class Model():
     def load_networks(self, which_epoch):
 	    pass
 
-    # print network information
-    def print_networks(self, verbose):
-        print('---------- Networks initialized -------------')
-        for name in self.model_names:
-            if isinstance(name, str):
-                net = getattr(self, 'net' + name)
-                num_params = 0
-                for param in net.parameters():
-                    num_params += param.numel()
-                if verbose:
-                    print(net)
-                print('[Network %s] Total number of parameters : %.3f M' % (name, num_params / 1e6))
-        print('-----------------------------------------------')
-
     # set requies_grad=Fasle to avoid computation
     def set_requires_grad(self, nets, requires_grad=False):
         if not isinstance(nets, list):
@@ -197,10 +202,11 @@ class Model():
 ######################################
 #  Test code
 ######################################
-import yaml
-config_file = 'configs/alexnet.yaml'
-with open(config_file, 'r') as f_in:
-    cfg = yaml.load(f_in)
-print(cfg)
-model = Model()
-model.initialize(cfg)
+#  import yaml
+#  config_file = 'configs/alexnet.yaml'
+#  with open(config_file, 'r') as f_in:
+    #  cfg = yaml.load(f_in)
+#  print(cfg)
+#  model = Model()
+#  model.initialize(cfg)
+#  print(model.netB, model.netH, model.netD)

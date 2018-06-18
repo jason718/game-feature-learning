@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
+from torch.nn import init
 
 ############################
 #  Functions definition
 ############################
-def init_weights(net, init_type='normal', gain=0.02):
+def init_net(net, gpu_ids=None, init_type='normal', gain=0.02):
     def init_func(m):
         classname = m.__class__.__name__
         if hasattr(m, 'weight') and (classname.find('Conv') != -1 or classname.find('Linear') != -1):
@@ -24,9 +25,12 @@ def init_weights(net, init_type='normal', gain=0.02):
             init.normal_(m.weight.data, 1.0, gain)
             init.constant_(m.bias.data, 0.0)
 
+    if gpu_ids:
+        net.cuda()
+        net = torch.nn.DataParallel(net, gpu_ids)
+
     print('initialize network with %s' % init_type)
     net.apply(init_func)
-
 
 def get_scheduler(optimizer, opt):
     if opt.lr_policy == 'lambda':
@@ -85,15 +89,15 @@ class netB_alexnet(nn.Module):
     def forward(self, x):
         """Compute feature before relu/pooling following github.com/soumith/ganhacks"""
         feat1 = self.bn1(self.conv1(x))
-        feat2 = self.bn2(self.conv2(self.maxpooling1(self.relu1(x))))
-        feat3 = self.bn3(self.conv3(self.maxpooling2(self.relu2(x))))
-        feat4 = self.bn4(self.conv4(self.relu3(x)))
-        feat5 = self.bn5(self.conv5(self.relu4(x)))
-        feat6 = self.bn6(self.fc6(self.maxpooling5(self.relu5(x))))
-        feat7 = self.relu7(self.bn7(self.fc7(self.relu6(x))))
+        feat2 = self.bn2(self.conv2(self.maxpooling1(self.relu1(feat1))))
+        feat3 = self.bn3(self.conv3(self.maxpooling2(self.relu2(feat2))))
+        feat4 = self.bn4(self.conv4(self.relu3(feat3)))
+        feat5 = self.bn5(self.conv5(self.relu4(feat4)))
+        feat6 = self.bn6(self.fc6(self.maxpooling5(self.relu5(feat5))))
+        feat7 = self.relu7(self.bn7(self.fc7(self.relu6(feat6))))
 
-        return {'conv1':feat1, 'conv2':feat2, 'conv3':feat3,
-                'conv4':feat4, 'conv5':feat5, 'fc6':feat6, 'fc7':feat7}
+        return {'conv1':feat1, 'conv2':feat2, 'conv3':feat3, 'conv4':feat4,
+                'conv5':feat5, 'fc6':feat6, 'fc7':feat7, 'out':feat7}
 
 class netH_alexnet(nn.Module):
     def __init__(self):
@@ -120,24 +124,64 @@ class netH_alexnet(nn.Module):
         return {'depth':self.depth(x), 'edge':self.edge(x), 'norm':self.normal(x)}
 
 class netD_alexnet(nn.Module):
-    def __init__(self):
+    def __init__(self, layer):
         super(netD_alexnet, self).__init__()
-        self.main = nn.Sequential(
-            # input is 4096 x 13 x 13
-            nn.Conv2d(4096, 64, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(64), nn.LeakyReLU(0.2, inplace=True),
-            # state size. 64 x 13 x 13
-            nn.Conv2d(64 , 128, kernel_size=3, stride=2),
-            nn.BatchNorm2d(128), nn.LeakyReLU(0.2, inplace=True),
-            # state size. 128 x 6 x 6
-            nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1),
-            nn.BatchNorm2d(256), nn.LeakyReLU(0.2, inplace=True),
-            # state size. 256 x 3 x 3
-            nn.Conv2d(256,   1, kernel_size=1, stride=3, padding=0),
-            nn.Sigmoid())
+        if layer == 'fc':
+            self.main = nn.Sequential(
+                nn.Conv2d(4096, 512, kernel_size=3, stride=2, padding=0),
+                nn.BatchNorm2d(512), nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(512,256, kernel_size=1, stride=1, padding=0),
+                nn.BatchNorm2d(256), nn.LeakyReLU(0.2, inplace=True),
+                # state size. 1 x 6 x 6
+                nn.Conv2d(256, 1, kernel_size=1, stride=1, padding=0))
+        elif layer == 'conv1':
+            self.main = nn.Sequential(
+                # input is 96 x 55 x 55
+                nn.Conv2d(96,  192, kernel_size=3, stride=2, padding=0),
+                nn.BatchNorm2d(192), nn.LeakyReLU(0.2, inplace=True),
+                # state size. 192 x 27 x 27
+                nn.Conv2d(192, 384, kernel_size=3, stride=2, padding=0),
+                nn.BatchNorm2d(384), nn.LeakyReLU(0.2, inplace=True),
+                # state size. 384 x 13 x 13
+                nn.Conv2d(384, 512, kernel_size=3, stride=2, padding=0),
+                nn.BatchNorm2d(512), nn.LeakyReLU(0.2, inplace=True),
+                # state size. 512 x 6 x 6
+                nn.Conv2d(512,   1, kernel_size=1, stride=1, padding=0))
+        elif layer =='conv2':
+            self.main = nn.Sequential(
+                # input is 256 x 27 x 27
+                nn.Conv2d(256, 512, kernel_size=3, stride=2, padding=0),
+                nn.BatchNorm2d(512), nn.LeakyReLU(0.2, inplace=True),
+                # state size. 512 x 13 x 13
+                nn.Conv2d(512, 640, kernel_size=3, stride=2, padding=0),
+                nn.BatchNorm2d(640), nn.LeakyReLU(0.2, inplace=True),
+                # state size. 1 x 6 x 6
+                nn.Conv2d(640,   1, kernel_size=1, stride=1, padding=0))
+        elif layer =='conv3' or layer == 'conv4':
+            self.main = nn.Sequential(
+                # input is 384 x 13 x 13
+                nn.Conv2d(384, 512, kernel_size=3, stride=2, padding=0),
+                nn.BatchNorm2d(512), nn.LeakyReLU(0.2, inplace=True),
+                # state size. 512 x 6 x 6
+                nn.Conv2d(512, 512, kernel_size=1, stride=1, padding=0),
+                nn.BatchNorm2d(512), nn.LeakyReLU(0.2, inplace=True),
+                # state size. 1 x 6 x 6
+                nn.Conv2d(512,   1, kernel_size=1, stride=1, padding=0))
+        elif layer == 'conv5':
+            self.main = nn.Sequential(
+                # input is 256 x 13 x 13
+                nn.Conv2d(256, 512, kernel_size=3, stride=2, padding=0),
+                nn.BatchNorm2d(512), nn.LeakyReLU(0.2, inplace=True),
+                # state size. 512 x 6 x 6
+                nn.Conv2d(512, 512, kernel_size=1, stride=1, padding=0),
+                nn.BatchNorm2d(512), nn.LeakyReLU(0.2, inplace=True),
+                # state size. 1 x 6 x 6
+                nn.Conv2d(512,   1, kernel_size=1, stride=1, padding=0))
+        else:
+            raise ValueError('wrong layer name')
 
-    def forward(self, input):
-        output = self.main(input)
+    def forward(self, x):
+        output = nn.Sigmoid(self.main(x))
         return output.view(-1, 1).squeeze(1)
 
 #############################
@@ -184,7 +228,6 @@ class netB_vgg16(nn.Module):
             nn.BatchNorm2d(512), nn.ReLU(inplace=True),
             nn.Conv2d(512, 512, kernel_size=3, padding=1),
             nn.BatchNorm2d(512), nn.ReLU(inplace=True))
-
 
     def forward(self, x):
         pass
