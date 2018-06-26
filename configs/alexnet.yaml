@@ -1,5 +1,5 @@
 ARCHI: alexnet
-checkpoints_dir: outputs
+CKPT_DIR: outputs
 
 CPU_MODE: False
 GPU_IDS: [0,1]

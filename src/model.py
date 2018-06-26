@@ -1,7 +1,6 @@
 import os
 import torch
 import pdb
-from collections import OrderedDict
 
 import networks
 
@@ -16,9 +15,9 @@ import networks
 class Model():
     def initialize(self, cfg):
         self.cfg = cfg
-        #  self.save_dir = os.path.join(cfg['checkpoints_dir'], cfg['archi'])
+        self.save_dir = os.path.join(cfg['CKPT_DIR'], cfg['ARCHI'])
 
-        # if using GPUs
+        ## set devices
         if cfg['GPU_IDS']:
             assert(torch.cuda.is_available())
             self.device = torch.device('cuda:{}'.format(cfg['GPU_IDS'][0]))
@@ -26,11 +25,6 @@ class Model():
             print('Using %d GPUs'% len(cfg['GPU_IDS']))
         else:
             self.device = torch.device('cpu')
-
-        #  # specify losses
-        #  self.loss_name = ['l_norm', 'l_dep', 'l_edge']
-        #  if self.cfg['use_DA']:
-        #      self.loss_name += ['loss_D', 'loss_G']
 
         # define network
         if cfg['ARCHI'] == 'alexnet':
@@ -53,13 +47,36 @@ class Model():
         else:
             raise ValueError('Un-supported network')
 
-        # initialize
+        # initialize network param.
         networks.init_net(self.netB, cfg['GPU_IDS'], 'xavier')
         networks.init_net(self.netH, cfg['GPU_IDS'], 'xavier')
         networks.init_net(self.netD, cfg['GPU_IDS'], 'xavier')
-
-        #  if cfg['TRAIN']:
-            #  self.schedulers = [networks.get_scheduler(cfgimizer, cfg) for cfgimizer in self.cfgimizers]
+        
+        # loss, optimizer, and scherduler
+        if cfg['TRAIN']:
+            ## model names
+            self.model_names = ['netB', 'netH']
+            
+            ## loss
+            self.criterionGAN = networks.GANLoss().to(self.device)
+            # TODO: decide depth loss
+            self.criterionDepth1 = nn.MSELoss().to(self.device)
+            self.criterionNorm = nn.CosineEmbeddingLoss().to(self.device)
+            # define during running, rely on data weight
+            self.criterionEdge = None
+            
+            ## optimizers
+            self.optimizer_B = torch.optim.Adam(self.netB.parameters(),
+                                               lr=cfg['LR'], betas=(cfg['BETA1'], 0.999))
+            self.optimizer_H = torch.optim.Adam(self.netG.parameters(),
+                                                lr=cfg['LR'], betas=(cfg['BETA1'], 0.999))
+            if cfg['USE_DA']:
+                self.model_names.append('netD')
+                ## use SGD for discriminator
+                self.optimizer_D = torch.optim.SGD(self.netD.parameters(),
+                                                    lr=cfg['LR'], momentum=cfg['MOMENTUM'], weight_decay=cfg['WEIGHT_DECAY']))
+            ## optimizers
+            self.schedulers = [networks.get_scheduler(cfgimizer, cfg) for cfgimizer in self.cfgimizers]
 
         #  if not cfg['TRAIN'] or cfg.continue_train:
         #      self.load_networks(cfg.which_epoch)
@@ -86,15 +103,18 @@ class Model():
         self.norm_pred, self.dep_pred, self.edge_pred = netH(self.feat_syn)
 
         # compute loss
-        self.loss_dep  = self.cfg['loss_dep_weight'] * criterion_dep(self.dep_pred, self.dep_gt)
-        self.loss_norm = self.cfg['loss_norm_weight'] * criterion_norm(self.norm_pred, self.norm_gt)
-        self.loss_edge = self.cfg['loss_edge_weight'] * criterion_edge(self.edge_pred, self.edge_gt)
+        self.loss_dep  = self.cfg['loss_dep_weight'] * self.criterionDepth1(self.dep_pred, self.dep_gt)
+        ## TODO depth loss2
+        self.loss_norm = self.cfg['loss_norm_weight'] * self.criterionNorm(self.norm_pred, self.norm_gt)
+        weight_e = (self.edge_pred.size(2) * self.edge_pred.size(3) - self.input_syn_edge_count ) / self.input_syn_edge_count
+        self.criterionEdge = nn.BCEWithLogitsLoss(weight=weight_e.view(-1,1,1,1)).to(self.device)
+        self.loss_edge = self.cfg['loss_edge_weight'] * self.criterionEdge(self.edge_pred, self.edge_gt)
 
         # backward from 3 tasks
         loss = self.loss_dep + self.loss_edge + self.loss_norm
 
         if self.cfg['USE_DA']:
-            pred_syn = self.netD(self.feat_syn.detach())
+            pred_syn = self.netD(self.feat_syn[self.cfg['DA_LAYER']].detach())
             self.loss_DA = self.criterionGAN(pred_syn, True)
             loss += self.loss_DA * self.cfg['loss_DA_weight']
 
@@ -103,12 +123,12 @@ class Model():
     def backward_D(self):
         # Synthetic
         # stop backprop to netB by detaching
-        _feat_s = self.syn_pool.query(self.feat_syn.detach())
+        _feat_s = self.syn_pool.query(self.feat_syn[self.cfg['DA_LAYER']].detach())
         pred_syn = self.netD(_feat_s)
         self.loss_D_syn = self.criterionGAN(pred_syn, False)
 
         # Real
-        _feat_r = torch.real_pool.query(self.feat_real.detach())
+        _feat_r = torch.real_pool.query(self.feat_real[self.cfg['DA_LAYER']].detach())
         pred_real = self.netD(_feat_r)
         self.loss_D_real = self.criterionGAN(pred_real, True)
 
@@ -122,13 +142,14 @@ class Model():
         # if DA, update on real data
         if self.cfg['USE_DA']:
             self.set_requires_grad(self.netD, True)
+            self.set_requires_grad([self.netB, self.netH], False)
             self.optimizer_D.zero_grad()
             self.backward_D()
             self.optimizer_D.step()
 
         # update on synthetic data
-        self.set_requires_grad(self.netB, True)
-        self.set_requires_grad(self.netH, True)
+        self.set_requires_grad([self.netB, self.netH], True)
+        self.set_requires_grad(self.netD, False)
         self.optimizer_B.zero_grad()
         self.optimizer_H.zero_grad()
         self.backward_BH()
@@ -155,29 +176,40 @@ class Model():
         print('learning rate = %.7f' % lr)
 
     # return visualization images. train.py will display these images, and save the images to a html
-    def get_current_visuals(self):
-        visual_ret = OrderedDict()
-        for name in self.visual_names:
-            if isinstance(name, str):
-                visual_ret[name] = getattr(self, name)
-        return visual_ret
+    # def get_current_visuals(self):
+    #    from collections import OrderedDict
+    #    visual_ret = OrderedDict()
+    #    for name in self.visual_names:
+    #        if isinstance(name, str):
+    #            visual_ret[name] = getattr(self, name)
+    #    return visual_ret
 
-    # return traning losses/errors. train.py will print out these errors as debugging information
-    def get_current_losses(self):
-        errors_ret = OrderedDict()
-        for name in self.loss_names:
-            if isinstance(name, str):
-                # float(...) works for both scalar tensor and float number
-                errors_ret[name] = float(getattr(self, 'loss_' + name))
-        return errors_ret
+    # print on screen, log into tensorboard
+    def print_log_losses(self):
+        print('Training on task: Loss_dep: %.4f | Loss_edge: %.4f | loss_norm: %.4f'
+              % (self.loss_dep.data[0], self.loss_edge.data[0], self.loss_norm.data[0]))
+        info = {
+            'loss_dep': self.loss_dep.data[0],
+            'loss_norm': self.loss_norm.data[0],
+            'loss_edge': self.loss_edge.data[0]
+            }
+        if self.cfg['USE_DA']:
+            print('Training for DA: Loss_D_syn: %.4f | Loss_D_real: %.4f | Loss_DA: %.4f'
+                  % (self.loss_D_syn.data[0], self.loss_D_real.data[0], self.loss_DA.data[0]))
+            info['loss_D_syn'] = self.loss_D_syn.data[0]
+            info['loss_D_real'] = self.loss_D_real.data[0]
+            info['loss_DA'] = self.loss_DA.data[0]
+
+        for tag, value in info.items():
+            self.logger.scalar_summary(tag, value, total)
 
     # save models to the disk
     def save_networks(self, which_epoch):
         for name in self.model_names:
             if isinstance(name, str):
-                save_filename = '%s_net_%s.pth' % (which_epoch, name)
+                save_filename = '%s_%s.pth' % (which_epoch, name)
                 save_path = os.path.join(self.save_dir, save_filename)
-                net = getattr(self, 'net' + name)
+                net = getattr(self, name)
 
                 if len(self.gpu_ids) > 0 and torch.cuda.is_available():
                     torch.save(net.module.cpu().state_dict(), save_path)
@@ -187,7 +219,18 @@ class Model():
 
     # load models from the disk
     def load_networks(self, which_epoch):
-	    pass
+        for name in self.model_names:
+            if isinstance(name, str):
+                load_filename = '%s_%s.pth' % (which_epoch, name)
+                load_path = os.path.join(self.save_dir, load_filename)
+                net = getattr(self, 'net' + name)
+                if isinstance(net, torch.nn.DataParallel):
+                    net = net.module
+                    print('loading the model from %s' % load_path)
+                    # if you are using PyTorch newer than 0.4 (e.g., built from
+                    # GitHub source), you can remove str() on self.device
+                    state_dict = torch.load(load_path, map_location=str(self.device))
+                net.load_state_dict(state_dict)
 
     # set requies_grad=Fasle to avoid computation
     def set_requires_grad(self, nets, requires_grad=False):

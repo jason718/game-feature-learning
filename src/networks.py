@@ -4,6 +4,8 @@ from torch.nn import init
 
 ############################
 #  Functions definition
+#  Most of the code here is borrowed from:
+#  pytorch-CycleGAN-and-pix2pix
 ############################
 def init_net(net, gpu_ids=None, init_type='normal', gain=0.02):
     def init_func(m):
@@ -32,7 +34,7 @@ def init_net(net, gpu_ids=None, init_type='normal', gain=0.02):
     print('initialize network with %s' % init_type)
     net.apply(init_func)
 
-def get_scheduler(optimizer, opt):
+def get_scheduler(optimizer, cfg):
     if opt.lr_policy == 'lambda':
         def lambda_rule(epoch):
             lr_l = 1.0 - max(0, epoch + 1 + opt.epoch_count - opt.niter) / float(opt.niter_decay + 1)
@@ -46,6 +48,30 @@ def get_scheduler(optimizer, opt):
         return NotImplementedError('learning rate policy [%s] is not implemented', opt.lr_policy)
     return scheduler
 
+# Defines the GAN loss which uses either LSGAN or the regular GAN.
+# When LSGAN is used, it is basically same as MSELoss,
+# but it abstracts away the need to create the target label tensor
+# that has the same size as the input
+class GANLoss(nn.Module):
+    def __init__(self, use_lsgan=False, target_real_label=1.0, target_fake_label=0.0):
+        super(GANLoss, self).__init__()
+        self.register_buffer('real_label', torch.tensor(target_real_label))
+        self.register_buffer('fake_label', torch.tensor(target_fake_label))
+        if use_lsgan:
+            self.loss = nn.MSELoss()
+        else:
+            self.loss = nn.BCELoss()
+
+def get_target_tensor(self, input, target_is_real):
+    if target_is_real:
+        target_tensor = self.real_label
+        else:
+            target_tensor = self.fake_label
+    return target_tensor.expand_as(input)
+
+def __call__(self, input, target_is_real):
+    target_tensor = self.get_target_tensor(input, target_is_real)
+    return self.loss(input, target_tensor)
 
 #############################
 # alexnet-model definition
@@ -124,16 +150,17 @@ class netH_alexnet(nn.Module):
         return {'depth':self.depth(x), 'edge':self.edge(x), 'norm':self.normal(x)}
 
 class netD_alexnet(nn.Module):
-    def __init__(self, layer):
+    def __init__(self, layer='conv5'):
         super(netD_alexnet, self).__init__()
-        if layer == 'fc':
+        if layer == 'fc6':
             self.main = nn.Sequential(
                 nn.Conv2d(4096, 512, kernel_size=3, stride=2, padding=0),
                 nn.BatchNorm2d(512), nn.LeakyReLU(0.2, inplace=True),
                 nn.Conv2d(512,256, kernel_size=1, stride=1, padding=0),
                 nn.BatchNorm2d(256), nn.LeakyReLU(0.2, inplace=True),
                 # state size. 1 x 6 x 6
-                nn.Conv2d(256, 1, kernel_size=1, stride=1, padding=0))
+                nn.Conv2d(256, 1, kernel_size=1, stride=1, padding=0),
+                nn.Sigmoid())
         elif layer == 'conv1':
             self.main = nn.Sequential(
                 # input is 96 x 55 x 55
@@ -146,7 +173,8 @@ class netD_alexnet(nn.Module):
                 nn.Conv2d(384, 512, kernel_size=3, stride=2, padding=0),
                 nn.BatchNorm2d(512), nn.LeakyReLU(0.2, inplace=True),
                 # state size. 512 x 6 x 6
-                nn.Conv2d(512,   1, kernel_size=1, stride=1, padding=0))
+                nn.Conv2d(512,   1, kernel_size=1, stride=1, padding=0),
+                nn.Sigmoid())
         elif layer =='conv2':
             self.main = nn.Sequential(
                 # input is 256 x 27 x 27
@@ -156,7 +184,8 @@ class netD_alexnet(nn.Module):
                 nn.Conv2d(512, 640, kernel_size=3, stride=2, padding=0),
                 nn.BatchNorm2d(640), nn.LeakyReLU(0.2, inplace=True),
                 # state size. 1 x 6 x 6
-                nn.Conv2d(640,   1, kernel_size=1, stride=1, padding=0))
+                nn.Conv2d(640,   1, kernel_size=1, stride=1, padding=0),
+                nn.Sigmoid())
         elif layer =='conv3' or layer == 'conv4':
             self.main = nn.Sequential(
                 # input is 384 x 13 x 13
@@ -166,7 +195,8 @@ class netD_alexnet(nn.Module):
                 nn.Conv2d(512, 512, kernel_size=1, stride=1, padding=0),
                 nn.BatchNorm2d(512), nn.LeakyReLU(0.2, inplace=True),
                 # state size. 1 x 6 x 6
-                nn.Conv2d(512,   1, kernel_size=1, stride=1, padding=0))
+                nn.Conv2d(512,   1, kernel_size=1, stride=1, padding=0),
+                nn.Sigmoid())
         elif layer == 'conv5':
             self.main = nn.Sequential(
                 # input is 256 x 13 x 13
@@ -176,12 +206,13 @@ class netD_alexnet(nn.Module):
                 nn.Conv2d(512, 512, kernel_size=1, stride=1, padding=0),
                 nn.BatchNorm2d(512), nn.LeakyReLU(0.2, inplace=True),
                 # state size. 1 x 6 x 6
-                nn.Conv2d(512,   1, kernel_size=1, stride=1, padding=0))
+                nn.Conv2d(512,   1, kernel_size=1, stride=1, padding=0),
+                nn.Sigmoid())
         else:
             raise ValueError('wrong layer name')
 
     def forward(self, x):
-        output = nn.Sigmoid(self.main(x))
+        output = self.main(x)
         return output.view(-1, 1).squeeze(1)
 
 #############################
