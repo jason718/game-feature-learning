@@ -1,12 +1,13 @@
 import torch
 import torch.nn as nn
 from torch.nn import init
+from torch.optim import lr_scheduler
 
-############################
+#############################################
 #  Functions definition
 #  Most of the code here is borrowed from:
 #  pytorch-CycleGAN-and-pix2pix
-############################
+#############################################
 def init_net(net, gpu_ids=None, init_type='normal', gain=0.02):
     def init_func(m):
         classname = m.__class__.__name__
@@ -33,19 +34,24 @@ def init_net(net, gpu_ids=None, init_type='normal', gain=0.02):
 
     print('initialize network with %s' % init_type)
     net.apply(init_func)
+    return net
 
 def get_scheduler(optimizer, cfg):
-    if opt.lr_policy == 'lambda':
+    if cfg['LR_POLICY'] == 'lambda':
+        # TODO
+        raise NotImplementedError('need to rewrite code here')
         def lambda_rule(epoch):
-            lr_l = 1.0 - max(0, epoch + 1 + opt.epoch_count - opt.niter) / float(opt.niter_decay + 1)
+            lr_l = 1.0 - max(0, epoch + 1 + cfg['N_EPOCH'] - cfg.niter) / float(cfg.niter_decay + 1)
             return lr_l
         scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda_rule)
-    elif opt.lr_policy == 'step':
-        scheduler = lr_scheduler.StepLR(optimizer, step_size=opt.lr_decay_iters, gamma=0.1)
-    elif opt.lr_policy == 'plateau':
+    elif cfg['LR_POLICY'] == 'step':
+        scheduler = lr_scheduler.StepLR(optimizer, step_size=cfg['LR_DECAY_EP'], gamma=0.1)
+    elif cfg['LR_POLICY'] == 'multi-step':
+        scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=cfg['LR_DECAY_EP'], gamma=0.1)
+    elif cfg['LR_POLICY'] == 'plateau':
         scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, threshold=0.01, patience=5)
     else:
-        return NotImplementedError('learning rate policy [%s] is not implemented', opt.lr_policy)
+        return NotImplementedError('learning rate policy [%s] is not implemented', opt['LR_POLICY'])
     return scheduler
 
 # Defines the GAN loss which uses either LSGAN or the regular GAN.
@@ -62,16 +68,16 @@ class GANLoss(nn.Module):
         else:
             self.loss = nn.BCELoss()
 
-def get_target_tensor(self, input, target_is_real):
-    if target_is_real:
-        target_tensor = self.real_label
+    def get_target_tensor(self, input, target_is_real):
+        if target_is_real:
+            target_tensor = self.real_label
         else:
             target_tensor = self.fake_label
-    return target_tensor.expand_as(input)
+        return target_tensor.expand_as(input)
 
-def __call__(self, input, target_is_real):
-    target_tensor = self.get_target_tensor(input, target_is_real)
-    return self.loss(input, target_tensor)
+    def __call__(self, input, target_is_real):
+        target_tensor = self.get_target_tensor(input, target_is_real)
+        return self.loss(input, target_tensor)
 
 #############################
 # alexnet-model definition
@@ -217,6 +223,7 @@ class netD_alexnet(nn.Module):
 
 #############################
 # vgg16-model definition
+# TODO: test
 #############################
 
 class netB_vgg16(nn.Module):
@@ -226,7 +233,9 @@ class netB_vgg16(nn.Module):
             nn.Conv2d(3, 64, kernel_size=3, padding=1),
             nn.BatchNorm2d(64), nn.ReLU(inplace=True),
             nn.Conv2d(64, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
+            nn.BatchNorm2d(64))
+
+        self.conv2 = nn.Sequential(
             nn.ReLU(inplace=True), nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Conv2d(64, 128, kernel_size=3, padding=1),
             nn.BatchNorm2d(128), nn.ReLU(inplace=True),
@@ -261,8 +270,100 @@ class netB_vgg16(nn.Module):
             nn.BatchNorm2d(512), nn.ReLU(inplace=True))
 
     def forward(self, x):
-        pass
+        feat1 = self.conv1(x)
+        feat2 = self.conv2(feat1)
+        feat3 = self.conv3(feat2)
+        feat4 = self.conv4(feat3)
+        feat5 = self.conv5(feat4)
 
+        return {'conv1':feat1, 'conv2':feat2, 'conv3':feat3, 'conv4':feat4, 'conv5':feat5}
+
+class netH_vgg16(nn.Module):
+    def __init__(self):
+        super(netH_vgg16, self).__init__()
+        self.main = nn.Sequential(
+            nn.ConvTranspose2d(512, 512, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(512), nn.ReLU(inplace=True))
+
+        self.n_2 = nn.Sequential(
+            nn.ConvTranspose2d(1024, 256, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(256), nn.ReLU(inplace=True))
+        self.n_3 = nn.Sequential(
+            nn.ConvTranspose2d(512, 128, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(128), nn.ReLU(inplace=True))
+        self.n_4 = nn.Sequential(
+            nn.ConvTranspose2d(256, 64, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(64), nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(64, 3, kernel_size=3, stride=1, padding=1))
+
+        self.d_2 = nn.Sequential(
+            nn.ConvTranspose2d(1024, 256, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(256), nn.ReLU(inplace=True))
+        self.d_3 = nn.Sequential(
+            nn.ConvTranspose2d(512, 128, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(128), nn.ReLU(inplace=True))
+        self.d_4 = nn.Sequential(
+            nn.ConvTranspose2d(256, 64, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(64), nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(64, 1, kernel_size=3, stride=1, padding=1))
+
+        self.e_2 = nn.Sequential(
+            nn.ConvTranspose2d(1024, 256, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(256), nn.ReLU(inplace=True))
+        self.e_3 = nn.Sequential(
+            nn.ConvTranspose2d(512, 128, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(128), nn.ReLU(inplace=True))
+        self.e_4 = nn.Sequential(
+            nn.ConvTranspose2d(256, 64, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(64), nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(64, 1, kernel_size=3, stride=1, padding=1))
+
+    def forward(self, f2, f3, f4, f5):
+        feat1 = self.main(f5)
+        d_feat2 = self.d_2(torch.cat((feat1,f4), dim=1))
+        d_feat3 = self.d_3(torch.cat((d_feat2,f3), dim=1))
+        d       = self.d_4(torch.cat((d_feat3,f2), dim=1))
+
+        n_feat2 = self.n_2(torch.cat((feat1,f4), dim=1))
+        n_feat3 = self.n_3(torch.cat((n_feat2,f3), dim=1))
+        n       = self.n_4(torch.cat((n_feat3,f2), dim=1))
+
+        e_feat2 = self.e_2(torch.cat((feat1,f4), dim=1))
+        e_feat3 = self.e_3(torch.cat((e_feat2,f3), dim=1))
+        e       = self.e_4(torch.cat((e_feat3,f2), dim=1))
+
+        return d,e,n
+
+class netD_vgg16(nn.Module):
+     def __init__(self, layer='conv5'):
+        super(netD_vgg16, self).__init__()
+        self.layer = layer
+        if self.layer == 'conv5':
+            self.main = nn.Sequential(
+                # input is 512 x 14 x 14
+                nn.Conv2d(512, 1024, kernel_size=4, stride=2),
+                nn.BatchNorm2d(1024), nn.LeakyReLU(0.2, inplace=True),
+                # 1024 x 6 x 6
+                nn.Conv2d(1024, 1024, kernel_size=1),
+                nn.BatchNorm2d(1024), nn.LeakyReLU(0.2, inplace=True),
+                # state size. 1024 x 6 x 6
+                nn.Conv2d(1024,   1, kernel_size=1),
+                nn.Sigmoid())
+        elif self.layer == 'conv4':
+            self.main = nn.Sequential(
+                # input is 512 x 28 x 28
+                nn.Conv2d(512, 1024, kernel_size=4, stride=2),
+                nn.BatchNorm2d(1024), nn.LeakyReLU(0.2, inplace=True),
+                # 1024 x 14 x 14
+                nn.Conv2d(1024, 1024, kernel_size=2,stride=2),
+                nn.BatchNorm2d(1024), nn.LeakyReLU(0.2, inplace=True),
+                # state size. 1024 x 6 x 6
+                nn.Conv2d(1024,   1, kernel_size=1),
+                nn.Sigmoid())
+
+     def forward(self, x):
+        output = self.main(x)
+        return output.squeeze(1)
 
 #############################
 # TODO:resnet-model definition

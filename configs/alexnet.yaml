@@ -1,26 +1,55 @@
 ARCHI: alexnet
-CKPT_DIR: outputs
+OUTPUT_PATH: outputs
 
 CPU_MODE: False
-GPU_IDS: [0,1]
-NUM_WORKER: 4
+GPU_IDS: [0,1,2,3,4,5,6,7]
+#GPU_IDS: [0,1]
+NUM_WORKER: 16
 
-TRAIN: True
+## Input
+GRAY: True
 CROP_SIZE: 227
-BATCH_SIZE: 2
-N_EPOCH: 40
-TRAIN_FILE: ./data/debug_10.txt
-SUNCG_DIR: /home/jason/saturnv-game/SUNCG/suncg_image256
-SCENENET_DIR: /home/jason/saturnv-game/scenenet5m
+TRAIN_FILE: ./data/train_1m_shuffle.txt
+#TRAIN_FILE: ./data/debug_10.txt
+#SUNCG_DIR: /home/jason/saturnv-game/SUNCG/suncg_image256
+#SCENENET_DIR: /home/jason/saturnv-game/scenenet5m
+SUNCG_DIR: /workspace/saturnv-game/SUNCG/suncg_image256
+SCENENET_DIR: /workspace/saturnv-game/scenenet5m
+
+RESUME: False
+TEST: False
+CKPT_PATH: outputs
+
+## Train
+TRAIN: True
+LR: 0.001
+LR_POLICY: multi-step
+LR_DECAY_EP: [7,9]
+N_EPOCH: 12
+BATCH_SIZE: 192
+
+## Optimizers
+# Adam params.
+BETA1: 0.5
+BETA2: 0.999
+# SGD params
+MOMENTUM: 0.9
+WEIGHT_DECAY: 0.0005
+
+## Print settings
 SAVE_FREQ: 2
+PRINT_FREQ: 2
+VIS_FREQ: 100
 
-# Domain Adaptation
+## Domain Adaptation
 USE_DA: True
+POOL_SIZE: 128
 DA_LAYER: conv5
-REAL_DIR: /home/jason/saturnv-game/places/debug
+#REAL_DIR: /home/jason/saturnv-game/places/places365_standard_train_1.6m
+REAL_DIR: /workspace/saturnv-game/places/places365_standard_train_1.6m
 
-loss_DA_weight: 0.1
-
-loss_dep_weight: 1
-loss_norm_weight: 1
-loss_edge_weight: 1
+## Weight for different losses
+DA_WEIGHT: 0.05
+DEP_WEIGHT: 5
+NORM_WEIGHT: 10
+EDGE_WEIGHT: 1

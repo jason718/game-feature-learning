@@ -10,15 +10,12 @@ from model import Model
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default='configs/alexnet.yaml', help='Path to the config file.')
-    parser.add_argument('--output_path', type=str, default='.', help="outputs path")
-    parser.add_argument("--resume", action="store_true")
     opts = parser.parse_args()
-
     with open(opts.config, 'r') as f_in:
         cfg = yaml.load(f_in)
     print(cfg)
 
-    ## Prepare dataset
+    ## Get dataset
     normalize = torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[1, 1, 1])
     data_syn = GameDataset(cfg, normalize)
     dataloader_syn = torch.utils.data.DataLoader(data_syn, num_workers=cfg['NUM_WORKER'],
@@ -37,7 +34,7 @@ if __name__ == '__main__':
         dataiterator_real = iter(dataloader_real)
         print('==> Number of real training images: %d.' % len(data_real))
 
-    ## Prepare model
+    ## Get model
     model = Model()
     model.initialize(cfg)
 
@@ -55,21 +52,20 @@ if __name__ == '__main__':
                 try:
                     inputs['real'] = next(dataiterator_real)
                 except StopIteration:
-                    dataloader_real=iter(dataloader_real)
+                    dataiterator_real=iter(dataloader_real)
+                    inputs['real'] = next(dataiterator_real)
 
+            ## update
             model.set_input(inputs)
-
             model.optimize()
 
             ## logging
-            if total_steps % opt.display_freq == 0:
-                pass
-            if total_steps % opt.print_loss_freq == 0:
-                pass
+            model.print_n_log_losses(epoch)
+            model.visualize_pred(epoch)
+
         ## saving
         if (epoch+1) % cfg['SAVE_FREQ'] == 0:
-            print('==> Saving the checkpoint ep: %d' % epoch)
-            #  model.save_networks()
+            model.save_networks(epoch)
 
     print('==> Finished Training')
     del dataiterator_syn
