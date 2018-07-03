@@ -33,7 +33,7 @@ Feel free to contact Jason Ren (zr5@illinois.edu) if you have any questions!
     - torchvision
     - numpy
     - opencv
-    - tensorflow (if you use tensorboard, will change to tensorboardX)
+    - tensorflow (necesary for the use of tensorboard. Will change it to tensorboardX)
     - scikit-image
 - Clone this repo:
 ```bash
@@ -55,17 +55,14 @@ Since I greatly changed the code structure, I am retraining using the new code t
         ```
             suncg_image
             ├── depth
-            |   ├── room_id1
-            │   ├── ...
-            |
-            └── normal
-            |   ├── room_id1
-            |   ├── ...
-            |
-            └── edge
-            |   ├── room_id1
-            |   ├── ...
-            |
+               ├── room_id1
+               ├── ...
+            ├── normal
+               ├── room_id1
+               ├── ...
+            ├── edge
+               ├── room_id1
+               ├── ...
             └── lab
                 ├── room_id1
                 ├── ...
@@ -75,10 +72,10 @@ Since I greatly changed the code structure, I am retraining using the new code t
          And make sure to put the files as the following structure:
         ```
             scenenet_image
-            ├── train
-            |   ├── 1
-            │   ├── 2
-            |
+            └── train
+               ├── 1
+               ├── 2
+               ├── ...
         ```
 - Dataset For Domain Adaptation:
     - Places-365: Download the Places images from [places website](http://places2.csail.mit.edu/).
