@@ -15,6 +15,12 @@ If you feel this useful, please consider cite:
 ```
 Feel free to contact Jason Ren (zr5@illinois.edu) if you have any questions!
 
+## Change Log
+1. ~~First update: alexnet training code.~~[Done!]
+2. Second update: trained model and feature-learning evaluation module
+3. Third update: vgg training code and tasks evaluation module
+
+
 ## Prerequisites
 - Pytorch-0.4 (some evaluation code borrowed from other places requiring Caffe)
 - Python2 (One evaluation code requiring Python3)
@@ -23,39 +29,69 @@ Feel free to contact Jason Ren (zr5@illinois.edu) if you have any questions!
 ## Getting Started
 ### Installation
 - Install PyTorch 0.4 and torchvision from http://pytorch.org
-- All other dependencies can be installed by
-```bash
-pip install -r requirements.txt
-```
+- Python packages
+    - torchvision
+    - numpy
+    - opencv
+    - tensorflow (if you use tensorboard, will change to tensorboardX)
+    - scikit-image
 - Clone this repo:
 ```bash
 git clone https://github.com/jason718/game-feature-learning
 cd game-feature-learning
 ```
+- Change the config files under configs.
 
 ### Pre-trained models:
-- Caffemodel(Caffenet): Coming soon
-- Pytorch model: Coming soon
+- Caffemodel(Caffenet): Coming in second update
+- Pytorch model: Coming in second update
 
-Since I greatly changed the code structure, I am retraining using the new code to reproduce
+Since I greatly changed the code structure, I am retraining using the new code to reproduce the paper results.
 
 ### Train/Test
 - Dataset:
-SUNCG
+    - SUNCG: Download the SUNCG images from [suncg website](http://suncg.cs.princeton.edu/).
+        And make sure to put the files as the following structure:
+        ```
+            suncg_image
+            ├── depth
+            |   ├── room_id1
+            │   ├── ...
+            |
+            └── normal
+            |   ├── room_id1
+            |   ├── ...
+            |
+            └── edge
+            |   ├── room_id1
+            |   ├── ...
+            |
+            └── lab
+                ├── room_id1
+                ├── ...
+        ```
 
-SceneNet
-
-For Domain Adaptation:
-
-Places-365
+    - SceneNet: Download the SceneNet images from [scenenet website](https://robotvault.bitbucket.io/scenenet-rgbd.html).
+         And make sure to put the files as the following structure:
+        ```
+            scenenet_image
+            ├── train
+            |   ├── 1
+            │   ├── 2
+            |
+        ```
+- Dataset For Domain Adaptation:
+    - Places-365: Download the Places images from [places website](http://places2.csail.mit.edu/).
+    - Or you can choose other dataset for DA such ImageNet...
 
 - Train a model:
 ```bash
 sh ./scripts/train.sh
 ```
 - Evaluate on feature learning
-
+    - Coming in second Update
 - Evaluate on three tasks
+    - Coming in Third Update
 
 
 ## Useful Resources
