@@ -49,7 +49,7 @@ cd game-feature-learning
 Since I greatly changed the code structure, I am retraining using the new code to reproduce the paper results.
 
 ### Dataset:
-    - SUNCG: Download the SUNCG images from [suncg website](http://suncg.cs.princeton.edu/).
+   - SUNCG: Download the SUNCG images from [suncg website](http://suncg.cs.princeton.edu/).
         And make sure to put the files as the following structure:
         ```
             suncg_image
@@ -67,7 +67,7 @@ Since I greatly changed the code structure, I am retraining using the new code t
                 ├── ...
         ```
 
-    - SceneNet: Download the SceneNet images from [scenenet website](https://robotvault.bitbucket.io/scenenet-rgbd.html).
+   - SceneNet: Download the SceneNet images from [scenenet website](https://robotvault.bitbucket.io/scenenet-rgbd.html).
          And make sure to put the files as the following structure:
         ```
             scenenet_image
