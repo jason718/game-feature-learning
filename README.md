@@ -48,8 +48,7 @@ cd game-feature-learning
 
 Since I greatly changed the code structure, I am retraining using the new code to reproduce the paper results.
 
-### Train/Test
-- Dataset:
+### Dataset:
     - SUNCG: Download the SUNCG images from [suncg website](http://suncg.cs.princeton.edu/).
         And make sure to put the files as the following structure:
         ```
@@ -81,6 +80,7 @@ Since I greatly changed the code structure, I am retraining using the new code t
     - Places-365: Download the Places images from [places website](http://places2.csail.mit.edu/).
     - Or you can choose other dataset for DA such ImageNet...
 
+### Train/Test
 - Train a model:
 ```bash
 sh ./scripts/train.sh
