@@ -17,7 +17,7 @@ Feel free to contact Jason Ren (zr5@illinois.edu) if you have any questions!
 
 ## Change Log
 1. ~~First update: alexnet training code.~~[Done!]
-2. Second update: trained model and feature-learning evaluation module
+2. Second update: trained model ~~and feature-learning evaluation module.~~
 3. Third update: vgg training code and tasks evaluation module
 
 
