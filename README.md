@@ -86,7 +86,8 @@ Since I greatly changed the code structure, I am retraining using the new code t
 sh ./scripts/train.sh
 ```
 - Evaluate on feature learning
-    - Coming in second Update
+  - Read each README.md under folder "eval-3rd-party"
+  
 - Evaluate on three tasks
     - Coming in Third Update
 
