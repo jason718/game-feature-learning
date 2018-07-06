@@ -1,0 +1,4 @@
+*.caffemodel
+*.pyc
+*~
+src/__pycache__/
