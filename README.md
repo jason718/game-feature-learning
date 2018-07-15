@@ -48,9 +48,8 @@ cd game-feature-learning
 
 Since I greatly changed the code structure, I am retraining using the new code to reproduce the paper results.
 
-### Train/Test
-- Dataset:
-    - SUNCG: Download the SUNCG images from [suncg website](http://suncg.cs.princeton.edu/).
+### Dataset:
+   - SUNCG: Download the SUNCG images from [suncg website](http://suncg.cs.princeton.edu/).
         And make sure to put the files as the following structure:
         ```
             suncg_image
@@ -68,7 +67,7 @@ Since I greatly changed the code structure, I am retraining using the new code t
                 ├── ...
         ```
 
-    - SceneNet: Download the SceneNet images from [scenenet website](https://robotvault.bitbucket.io/scenenet-rgbd.html).
+   - SceneNet: Download the SceneNet images from [scenenet website](https://robotvault.bitbucket.io/scenenet-rgbd.html).
          And make sure to put the files as the following structure:
         ```
             scenenet_image
@@ -81,12 +80,14 @@ Since I greatly changed the code structure, I am retraining using the new code t
     - Places-365: Download the Places images from [places website](http://places2.csail.mit.edu/).
     - Or you can choose other dataset for DA such ImageNet...
 
+### Train/Test
 - Train a model:
 ```bash
 sh ./scripts/train.sh
 ```
 - Evaluate on feature learning
-    - Coming in second Update
+  - Read each README.md under folder "eval-3rd-party"
+  
 - Evaluate on three tasks
     - Coming in Third Update
 
