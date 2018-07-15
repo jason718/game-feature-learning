@@ -14,4 +14,5 @@ We used the code from [Wang et al. (CVPR 2015)](http://www.cs.cmu.edu/~xiaolonw/
    # All the required data is present in this folder
    ```
 
-## SceneNet script I was using: getNormals_scenenet.m
+## SceneNet script I was using
+getNormals_scenenet.m
