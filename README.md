@@ -76,6 +76,7 @@ Since I greatly changed the code structure, I am retraining using the new code t
                ├── 2
                ├── ...
         ```
+     Please check scripts/surface_normals_code to generate surface normals from depth maps.
 - Dataset For Domain Adaptation:
     - Places-365: Download the Places images from [places website](http://places2.csail.mit.edu/).
     - Or you can choose other dataset for DA such ImageNet...
