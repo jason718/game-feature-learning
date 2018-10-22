@@ -15,12 +15,6 @@ If you feel this useful, please consider cite:
 ```
 Feel free to contact Jason Ren (zr5@illinois.edu) if you have any questions!
 
-## Change Log
-1. ~~First update: alexnet training code.~~[Done!]
-2. Second update: trained model ~~and feature-learning evaluation module.~~
-3. Third update: vgg training code and tasks evaluation module
-
-
 ## Prerequisites
 - Pytorch-0.4 (some evaluation code borrowed from other places requiring Caffe)
 - Python2 (One evaluation code requiring Python3)
