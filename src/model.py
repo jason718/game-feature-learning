@@ -157,7 +157,7 @@ class Model():
         loss = self.loss_edge + self.loss_norm + self.loss_dep
 
         if self.cfg['USE_DA']:
-            pred_syn = self.netD(self.feat_syn[self.cfg['DA_LAYER']].detach())
+            pred_syn = self.netD(self.feat_syn[self.cfg['DA_LAYER']])
             self.loss_DA = self.criterionGAN(pred_syn, True)
             loss += self.loss_DA * self.cfg['DA_WEIGHT']
 
