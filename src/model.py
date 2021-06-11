@@ -11,7 +11,7 @@ from utils import ImagePool, Logger
 #########################################################################
 #  Network definition
 #  Options:
-#      alexnet(caffenet-definition), vgg16, resnet(TODO)
+#      alexnet(caffenet-definition), vgg16, resnet50
 #  Note:
 #      github.com/BVLC/caffe/tree/master/models/bvlc_reference_caffenet
 #      use this to follow previous paper's practice.
@@ -42,11 +42,10 @@ class Model():
             if self.cfg['USE_DA'] and self.cfg['TRAIN']:
                 self.netD = netD_vgg16(self.cfg['DA_LAYER'])
         elif 'resnet' in cfg['ARCHI']:
-            raise NotImplementedError
             self.netB = networks.netB_resnet()
             self.netH = networks.netH_resnet()
             if self.cfg['USE_DA'] and self.cfg['TRAIN']:
-                self.netD = networks.netD_resnet(self.cfg['DA_LAYER'])
+                self.netD = networks.netD_resnet()
         else:
             raise ValueError('Un-supported network')
 
