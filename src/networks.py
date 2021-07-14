@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn import init
 from torch.optim import lr_scheduler
+from torchvision.models.resnet import resnet50
 
 #############################################
 #  Functions definition
@@ -365,15 +366,68 @@ class netD_vgg16(nn.Module):
         output = self.main(x)
         return output.squeeze(1)
 
+
 #############################
-# TODO:resnet-model definition
+# resnet50-model definition
+# TODO: test
 #############################
+
 
 class netB_resnet(nn.Module):
-    def __init__(self, name):
+    def __init__(self, use_pretrained = False):
         super(netB_resnet, self).__init__()
-        raise NotImplementedError
+        self.network = resnet50(pretrained = use_pretrained)
+        self.network = torch.nn.Sequential(*list(self.network.children())[:-2])
+        
+        
+    def forward(self, images):
+        output = self.network(images)
+        return output
+
+
+class netH_resnet(nn.Module):
+    def __init__(self):
+        super(netH_resnet, self).__init__()
+        self.depth = nn.Sequential(
+            nn.ConvTranspose2d(2048, 64, kernel_size = 3, stride = 2, padding = 1), nn.BatchNorm2d(64), nn.ReLU(inplace = True),
+            nn.ConvTranspose2d(64, 64, kernel_size = 3, stride = 2, padding = 1), nn.BatchNorm2d(64), nn.ReLU(inplace = True),
+            nn.ConvTranspose2d(64, 64, kernel_size = 3, stride = 2, padding = 1), nn.BatchNorm2d(64), nn.ReLU(inplace = True),
+            nn.ConvTranspose2d(64, 64, kernel_size = 1, stride = 2, output_padding = 1), nn.BatchNorm2d(64), nn.ReLU(inplace = True),
+            nn.ConvTranspose2d(64, 1, kernel_size = 1, stride = 2))
+
+
+        self.normal = nn.Sequential(
+            nn.ConvTranspose2d(2048, 64, kernel_size = 3, stride = 2, padding = 1), nn.BatchNorm2d(64), nn.ReLU(inplace = True),
+            nn.ConvTranspose2d(64, 64, kernel_size = 3, stride = 2, padding = 1), nn.BatchNorm2d(64), nn.ReLU(inplace = True),
+            nn.ConvTranspose2d(64, 64, kernel_size = 3, stride = 2, padding = 1), nn.BatchNorm2d(64), nn.ReLU(inplace = True),
+            nn.ConvTranspose2d(64, 64, kernel_size = 1, stride = 2, output_padding = 1), nn.BatchNorm2d(64), nn.ReLU(inplace = True),
+            nn.ConvTranspose2d(64, 3, kernel_size = 1, stride = 2))
+
+        self.edge = nn.Sequential(
+            nn.ConvTranspose2d(2048, 64, kernel_size = 3, stride = 2, padding = 1), nn.BatchNorm2d(64), nn.ReLU(inplace = True),
+            nn.ConvTranspose2d(64, 64, kernel_size = 3, stride = 2, padding = 1), nn.BatchNorm2d(64), nn.ReLU(inplace = True),
+            nn.ConvTranspose2d(64, 64, kernel_size = 3, stride = 2, padding = 1), nn.BatchNorm2d(64), nn.ReLU(inplace = True),
+            nn.ConvTranspose2d(64, 64, kernel_size = 1, stride = 2, output_padding = 1), nn.BatchNorm2d(64), nn.ReLU(inplace = True),
+            nn.ConvTranspose2d(64, 1, kernel_size = 1, stride = 2))
 
     def forward(self, x):
-        pass
+        return {'depth':self.depth(x), 'edge':self.edge(x), 'norm':self.normal(x)}
+
+
+class netD_resnet(nn.Module):
+    def __init__(self):
+        super(netD_resnet, self).__init__()
+        self.main = nn.Sequential(
+            nn.Conv2d(2048, 512, kernel_size = 3, stride = 2, padding = 0),
+            nn.BatchNorm2d(512), nn.LeakyReLU(0.2, inplace = True),
+            nn.Conv2d(512, 256, kernel_size = 1, stride = 1, padding = 0),
+            nn.BatchNorm2d(256), nn.LeakyReLU(0.2, inplace = True),
+            # state size. 1 x 6 x 6
+            nn.Conv2d(256, 1, kernel_size = 1, stride = 1, padding = 0),
+            nn.Sigmoid())
+        
+    def forward(self, x):
+        output = self.main(x)
+        return output.view(-1, 1).squeeze(1)
+
 
